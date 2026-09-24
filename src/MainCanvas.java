@@ -2,16 +2,12 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.Polygon;
-import java.awt.RenderingHints;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionListener;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 
 import javax.swing.JPanel;
@@ -46,9 +42,6 @@ public class MainCanvas extends JPanel implements Runnable {
 
 	boolean arrastando = false;
 	int ultimoMouseX, ultimoMouseY;
-
-	int modoCulling = 0;
-	boolean wireframe = false;
 
 	static final float NEAR = 0.15f;
 	static final float FOV_GRAUS = 70f;
@@ -120,27 +113,10 @@ public class MainCanvas extends JPanel implements Runnable {
 			case KeyEvent.VK_RIGHT: olharDireita = pressionado; break;
 			case KeyEvent.VK_UP: olharCima = pressionado; break;
 			case KeyEvent.VK_DOWN: olharBaixo = pressionado; break;
-			case KeyEvent.VK_C:
-				if (pressionado) modoCulling = (modoCulling + 1) % 3;
-				break;
-			case KeyEvent.VK_F:
-				if (pressionado) wireframe = !wireframe;
-				break;
-			case KeyEvent.VK_R:
-				if (pressionado) {
-					camera = new Camera();
-				}
-				break;
 		}
 	}
 
 	private void carregarCena() {
-		Color[] paleta = {
-				new Color(200, 90, 90), new Color(90, 160, 200), new Color(120, 190, 120),
-				new Color(220, 180, 90), new Color(170, 120, 200), new Color(200, 140, 90),
-				new Color(100, 200, 190), new Color(190, 100, 160)
-		};
-
 		Object[][] cena = {
 				{ "medieval house.obj", -18f, 9f },
 				{ "chair_01.obj", -10f, 2.5f },
@@ -152,21 +128,18 @@ public class MainCanvas extends JPanel implements Runnable {
 				{ "x-35_obj.obj", 32f, 7f },
 		};
 
-		int i = 0;
 		for (Object[] item : cena) {
 			String arquivo = (String) item[0];
 			float x = (Float) item[1];
 			float tamanho = (Float) item[2];
 			try {
 				ObjModel modelo = ObjLoader.carregar(arquivo);
-				Color cor = paleta[i % paleta.length];
-				objetos.add(new SceneObject(arquivo, modelo, x, 0f, 0f, tamanho, cor));
+				objetos.add(new SceneObject(arquivo, modelo, x, 0f, 0f, tamanho));
 				System.out.println("Carregado " + arquivo + ": " + modelo.vertices.length + " vertices, "
 						+ modelo.faces.length + " faces");
 			} catch (Exception e) {
 				System.err.println("Falha ao carregar " + arquivo + ": " + e.getMessage());
 			}
-			i++;
 		}
 	}
 
@@ -195,25 +168,17 @@ public class MainCanvas extends JPanel implements Runnable {
 		camera.clampPitch();
 	}
 
-	private static class FaceRender {
-		Polygon poly;
-		float z;
-		Color cor;
-	}
-
 	@Override
 	public void paint(Graphics g0) {
 		Graphics2D g = (Graphics2D) g0;
-		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-		g.setColor(new Color(150, 190, 230));
+		g.setColor(Color.white);
 		g.fillRect(0, 0, W, H);
 
 		float focal = (H / 2f) / (float) Math.tan(Math.toRadians(FOV_GRAUS / 2f));
 		Mat4x4 view = camera.getViewMatrix();
 
-		List<FaceRender> visiveis = new ArrayList<>();
-
+		g.setColor(Color.black);
 		for (SceneObject obj : objetos) {
 			Ponto3D[] verticesView = new Ponto3D[obj.verticesMundo.length];
 			for (int i = 0; i < obj.verticesMundo.length; i++) {
@@ -238,68 +203,20 @@ public class MainCanvas extends JPanel implements Runnable {
 				int x2 = Math.round(W / 2f + p2.x * s2);
 				int y2 = Math.round(H / 2f - p2.y * s2);
 
-				if (modoCulling != 0) {
-					long areaSinalizada = (long) (x1 - x0) * (y2 - y0) - (long) (y1 - y0) * (x2 - x0);
-					if (modoCulling == 1 && areaSinalizada <= 0) continue;
-					if (modoCulling == 2 && areaSinalizada >= 0) continue;
-				}
-
-				float ax = p1.x - p0.x, ay = p1.y - p0.y, az = p1.z - p0.z;
-				float bx = p2.x - p0.x, by = p2.y - p0.y, bz = p2.z - p0.z;
-				float nx = ay * bz - az * by;
-				float ny = az * bx - ax * bz;
-				float nz = ax * by - ay * bx;
-				float len = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
-				float intensidade = 0.6f;
-				if (len > 1e-6f) {
-					intensidade = Math.abs(nz / len);
-				}
-				float sombra = 0.35f + 0.65f * intensidade;
-
-				FaceRender fr = new FaceRender();
-				fr.poly = new Polygon(new int[] { x0, x1, x2 }, new int[] { y0, y1, y2 }, 3);
-				fr.z = (p0.z + p1.z + p2.z) / 3f;
-
-				Color base = obj.cor;
-				fr.cor = new Color(
-						clampCor(base.getRed() * sombra),
-						clampCor(base.getGreen() * sombra),
-						clampCor(base.getBlue() * sombra));
-
-				visiveis.add(fr);
-			}
-		}
-
-		visiveis.sort(Comparator.comparingDouble((FaceRender f) -> f.z).reversed());
-
-		for (FaceRender fr : visiveis) {
-			if (wireframe) {
-				g.setColor(fr.cor);
-				g.drawPolygon(fr.poly);
-			} else {
-				g.setColor(fr.cor);
-				g.fillPolygon(fr.poly);
-				g.setColor(new Color(0, 0, 0, 60));
-				g.drawPolygon(fr.poly);
+				g.drawLine(x0, y0, x1, y1);
+				g.drawLine(x1, y1, x2, y2);
+				g.drawLine(x2, y2, x0, y0);
 			}
 		}
 
 		desenhaHud(g);
 	}
 
-	private static int clampCor(float v) {
-		if (v < 0) return 0;
-		if (v > 255) return 255;
-		return (int) v;
-	}
-
 	private void desenhaHud(Graphics2D g) {
 		g.setFont(fonteHud);
 		g.setColor(Color.black);
-		g.drawString(String.format("FPS: %d  |  Camera: (%.1f, %.1f, %.1f)  yaw=%.0f pitch=%.0f",
-				fps, camera.x, camera.y, camera.z, camera.yaw, camera.pitch), 10, 20);
-		g.drawString("WASD move | SPACE/SHIFT sobe/desce | setas ou arrastar mouse olham | "
-				+ "C=culling(" + modoCulling + ") F=wireframe(" + wireframe + ") R=reset", 10, 40);
+		g.drawString(String.format("FPS: %d  |  Camera: (%.1f, %.1f, %.1f)", fps, camera.x, camera.y, camera.z), 10, 20);
+		g.drawString("WASD move | SPACE/SHIFT sobe/desce | setas ou arrastar mouse olham", 10, 40);
 	}
 
 	public void start() {

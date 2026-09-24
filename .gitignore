@@ -1,4 +1,6 @@
 bin/
+bin_check/
+bin_check2/
 *.class
 desktop.ini
 

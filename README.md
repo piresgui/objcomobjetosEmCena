@@ -7,7 +7,7 @@ A small Java/Swing software 3D renderer built for a Computer Graphics course. It
 - Wavefront `.obj` parser (`v` and `f` lines, with fan triangulation for polygons with more than 3 vertices)
 - Multiple independent models placed side by side in one scene, each auto-scaled and grounded regardless of the original file's units
 - Free-fly camera: move, strafe, go up/down, and look around
-- Simple software rasterizer: perspective projection, painter's algorithm depth sorting, per-face "headlight" shading, optional backface culling and wireframe mode
+- Simple software rasterizer: perspective projection, wireframe rendering (triangle edges only, no fill/shading)
 
 ## Controls
 
@@ -17,9 +17,6 @@ A small Java/Swing software 3D renderer built for a Computer Graphics course. It
 | `Space` / `Shift` | Move up / down |
 | Arrow keys | Look around |
 | Left mouse button + drag | Look around |
-| `C` | Cycle backface culling modes (off / mode A / mode B) |
-| `F` | Toggle wireframe / filled rendering |
-| `R` | Reset camera |
 
 ## Project structure
 
